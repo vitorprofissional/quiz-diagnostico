@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico Estratégico - VMD+</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000000;
+        }
+        .vmd-purple-bg { background-color: #7C3AED; }
+        .vmd-purple-text { color: #A78BFA; }
+        .vmd-border { border-color: #4C1D95; }
+        .card {
+            background-color: #1E1B22;
+            border: 1px solid #2A2730;
+        }
+        .progress-bar-fill {
+            transition: width 0.4s ease-in-out;
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out forwards;
+        }
+        .fade-out {
+            animation: fadeOut 0.5s ease-in-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(-10px); }
+        }
+        .answer-btn:hover {
+            background-color: #393442;
+            border-color: #7C3AED;
+        }
+        .error-border {
+            border-color: #EF4444 !important;
+        }
+    </style>
+</head>
+<body class="text-gray-200">
+
+    <div class="container mx-auto p-4 flex flex-col items-center justify-center min-h-screen">
+
+        <main id="quiz-wrapper" class="w-full max-w-2xl">
+            <!-- Cabeçalho -->
+            <header class="text-center mb-6 fade-in">
+                <h1 class="text-5xl md:text-6xl font-black vmd-purple-text tracking-tighter">VMD+</h1>
+                <p class="text-lg md:text-xl font-light text-gray-400">Diagnóstico Estratégico</p>
+            </header>
+
+            <!-- Card Principal do Quiz -->
+            <div id="quiz-container" class="card rounded-2xl p-6 md:p-10 shadow-2xl w-full">
+                
+                <!-- Barra de Progresso -->
+                <div id="progress-container" class="w-full bg-gray-700 rounded-full h-2 mb-8 hidden">
+                    <div id="progress-bar" class="vmd-purple-bg h-2 rounded-full progress-bar-fill" style="width: 0%"></div>
+                </div>
+
+                <!-- Conteúdo Dinâmico -->
+                <div id="content-area" class="min-h-[300px] flex flex-col justify-center">
+                    <!-- Tela Inicial -->
+                    <div id="start-screen" class="text-center fade-in">
+                        <h2 class="text-3xl font-bold mb-4 text-white">Vamos Mapear seu Caminho para o Sucesso.</h2>
+                        <p class="text-gray-400 mb-8 max-w-xl mx-auto">Este diagnóstico aprofundado nos ajudará a entender seu momento atual e a traçar o plano de ação mais eficaz para o seu negócio.</p>
+                        <button id="start-btn" class="w-full md:w-auto vmd-purple-bg hover:bg-violet-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-300 transform hover:scale-105">
+                            Começar Diagnóstico
+                        </button>
+                    </div>
+
+                    <!-- Área das Perguntas (será preenchida via JS) -->
+                    <div id="question-area" class="hidden"></div>
+
+                    <!-- Tela de Resultado -->
+                    <div id="result-screen" class="hidden"></div>
+                </div>
+
+            </div>
+             <footer class="text-center mt-8 text-gray-600 text-sm">
+                <p>&copy; 2024 VMD+. Todos os direitos reservados.</p>
+            </footer>
+        </main>
+    </div>
+
+    <script>
+        // --- ELEMENTOS DO DOM ---
+        const startBtn = document.getElementById('start-btn');
+        const startScreen = document.getElementById('start-screen');
+        const questionArea = document.getElementById('question-area');
+        const resultScreen = document.getElementById('result-screen');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+
+        // --- CONFIGURAÇÕES ---
+        const quizWebhookUrl = 'https://autovmd-n8n.7hn4wr.easypanel.host/webhook/quiz-diagnostico-estrategico';
+        const scheduleWebhookUrl = 'https://autovmd-n8n.7hn4wr.easypanel.host/webhook/agendar-diagnostico';
+        const scheduleLink = 'https://calendly.com/vitor-agenciavendermais/30min';
+
+        // --- DADOS DO QUIZ ---
+        const questions = [
+            { question: "Há quantos anos a empresa está ativa?", answers: [ { text: "Menos de 1 ano" }, { text: "1 a 3 anos" }, { text: "3 a 5 anos" }, { text: "Mais de 5 anos" } ] },
+            { question: "A empresa possui mais de uma unidade ou é uma franquia?", answers: [ { text: "Não, apenas uma unidade" }, { text: "Sim, mais de uma unidade" }, { text: "Sim, é uma franquia" }, { text: "Outro" } ] },
+            { question: "Você tem sócios ou existe algum outro tomador de decisão?", answers: [ { text: "Sou o único tomador de decisão" }, { text: "Sim, tenho sócios/outros decisores" } ] },
+            { question: "Como vocês têm gerado oportunidades pro negócio de vocês (% por canal)?", isInput: true, placeholder: "Ex: 80% indicação, 20% Instagram..." },
+            { question: "Qual resultado você está procurando?", answers: [ { text: "Aumentar as vendas no geral" }, { text: "Atrair mais clientes para o local físico" }, { text: "Vender mais pelo site/delivery" }, { text: "Fortalecer a marca" } ] },
+            { question: "Qual a média do faturamento mensal da empresa?", answers: [ { text: "Ainda não faturo consistentemente" }, { text: "Até R$ 10.000" }, { text: "Entre R$ 10.000 e R$ 50.000" }, { text: "Acima de R$ 50.000" } ] },
+            { question: "Você tem seu produto cadastrado em uma plataforma digital ou faz a venda direta?", answers: [ { text: "Venda direta (WhatsApp, Direct, etc)" }, { text: "Plataforma digital (Hotmart, etc)" }, { text: "Ambos" } ] },
+            { question: "Você utiliza CRM para controlar os clientes?", answers: [ { text: "Sim, utilizo um CRM" }, { text: "Não, uso planilhas ou cadernos" }, { text: "Não sei o que é um CRM" } ] },
+            { question: "Quem é o seu cliente ideal?", isInput: true, placeholder: "Descreva a pessoa ou empresa que você mais ama atender." },
+            { question: "Você tem alguma agência ou time interno de marketing?", answers: [ { text: "Não, eu faço tudo sozinho" }, { text: "Tenho uma equipe interna" }, { text: "Tenho uma agência parceira" }, { text: "Tenho freelancers/terceirizados" } ] },
+            { question: "Se sim, qual o valor do investimento mensal que você fez? (fee / anúncios)", isInput: true, placeholder: "Se não se aplica, digite 'N/A'." },
+            { question: "Você tem um time de criação (design/vídeo), interno ou terceirizado?", answers: [ { text: "Não, eu mesmo crio" }, { text: "Sim, interno" }, { text: "Sim, terceirizado" } ] },
+            { question: "Você tem um time comercial? Quantas pessoas?", answers: [ { text: "Não, eu sou o time comercial" }, { text: "Sim, 1 a 2 pessoas" }, { text: "Sim, 3 ou mais pessoas" } ] },
+            { question: "Quais são seus principais concorrentes?", isInput: true, placeholder: "Cite 1 ou 2 nomes." },
+            { question: "E qual empresa ou profissional é sua maior referência de mercado?", isInput: true, placeholder: "Quem você admira e acompanha?" },
+            { question: "O que você entrega que seu concorrente não entrega?", isInput: true },
+            { question: "O que você deseja alcançar nos próximos 12 meses com seu negócio?", isInput: true, placeholder: "Ex: Dobrar o faturamento, contratar equipe..." },
+            { question: "Qual está sendo o maior desafio para atingir seu estado ideal?", isInput: true },
+            { question: "Como sua vida pessoal seria diferente após você conquistar isso?", isInput: true }
+        ];
+
+        // --- ESTADO DO QUIZ ---
+        let currentQuestionIndex = 0;
+        let userAnswers = []; // Array para armazenar as respostas e facilitar a navegação
+
+        // --- FUNÇÕES ---
+        async function sendWebhook(url, data) {
+            // Converte o array de respostas para o formato chave-valor antes de enviar
+            const payload = data.reduce((obj, item) => {
+                obj[item.question] = item.answer;
+                return obj;
+            }, {});
+
+            try {
+                await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+            } catch (error) {
+                console.error('Erro ao enviar webhook:', error);
+            }
+        }
+
+        function startQuiz() {
+            startScreen.classList.add('fade-out');
+            setTimeout(() => {
+                startScreen.style.display = 'none';
+                progressContainer.classList.remove('hidden');
+                progressContainer.classList.add('fade-in');
+                questionArea.classList.remove('hidden');
+                displayQuestion();
+            }, 500);
+        }
+
+        function displayQuestion() {
+            const questionData = questions[currentQuestionIndex];
+            
+            const progress = ((currentQuestionIndex) / questions.length) * 100;
+            progressBar.style.width = `${progress}%`;
+
+            let content = `<div class="fade-in">`;
+            content += `<h2 class="text-2xl md:text-3xl font-bold mb-6 text-center text-white">${questionData.question}</h2>`;
+            
+            if (questionData.isInput) {
+                content += `
+                    <div class="flex flex-col items-center">
+                        <textarea id="text-input" class="w-full max-w-md card border-2 vmd-border rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-violet-500 transition-colors" rows="3" placeholder="${questionData.placeholder || 'Sua resposta...'}"></textarea>
+                        <p id="error-message" class="text-red-500 text-sm mt-2 h-5"></p>
+                        <button id="next-btn-input" class="mt-2 vmd-purple-bg hover:bg-violet-700 text-white font-bold py-2 px-6 rounded-lg transition duration-300">Próximo</button>
+                    </div>
+                `;
+            } else {
+                content += `<div class="grid grid-cols-1 gap-3 max-w-md mx-auto">`;
+                questionData.answers.forEach(answer => {
+                    content += `<button class="answer-btn w-full text-center card p-4 rounded-lg border-2 vmd-border transition duration-300">${answer.text}</button>`;
+                });
+                content += `</div>`;
+            }
+
+            // Adiciona o botão de voltar
+            if (currentQuestionIndex > 0) {
+                content += `
+                    <div class="mt-6 text-center">
+                        <button id="back-btn" class="text-gray-400 hover:text-white transition-colors">‹ Voltar</button>
+                    </div>
+                `;
+            }
+
+            content += `</div>`;
+            questionArea.innerHTML = content;
+
+            // Adiciona os event listeners
+            if (questionData.isInput) {
+                document.getElementById('next-btn-input').addEventListener('click', handleAnswer);
+                const textInput = document.getElementById('text-input');
+                textInput.addEventListener('input', () => {
+                    textInput.classList.remove('error-border');
+                    document.getElementById('error-message').textContent = '';
+                });
+            } else {
+                document.querySelectorAll('.answer-btn').forEach(btn => {
+                    btn.addEventListener('click', handleAnswer);
+                });
+            }
+
+            if (currentQuestionIndex > 0) {
+                document.getElementById('back-btn').addEventListener('click', handleBack);
+            }
+        }
+
+        function handleAnswer(event) {
+            const questionData = questions[currentQuestionIndex];
+            let answerText;
+
+            if (questionData.isInput) {
+                const textInput = document.getElementById('text-input');
+                answerText = textInput.value.trim();
+                // Validação
+                if (answerText === '') {
+                    textInput.classList.add('error-border');
+                    document.getElementById('error-message').textContent = 'Por favor, preencha este campo.';
+                    return;
+                }
+            } else {
+                const btn = event.currentTarget;
+                answerText = btn.textContent;
+            }
+
+            userAnswers.push({ question: questionData.question, answer: answerText });
+            
+            // Animação de saída
+            questionArea.firstElementChild.classList.remove('fade-in');
+            questionArea.firstElementChild.classList.add('fade-out');
+
+            setTimeout(() => {
+                currentQuestionIndex++;
+                if (currentQuestionIndex < questions.length) {
+                    displayQuestion();
+                } else {
+                    finishQuiz();
+                }
+            }, 500);
+        }
+
+        function handleBack() {
+            userAnswers.pop(); // Remove a última resposta
+            
+            questionArea.firstElementChild.classList.remove('fade-in');
+            questionArea.firstElementChild.classList.add('fade-out');
+            
+            setTimeout(() => {
+                currentQuestionIndex--;
+                displayQuestion();
+            }, 500);
+        }
+
+        async function finishQuiz() {
+            await sendWebhook(quizWebhookUrl, userAnswers);
+
+            progressBar.style.width = `100%`;
+            questionArea.classList.add('fade-out');
+            progressContainer.classList.add('fade-out');
+
+            setTimeout(() => {
+                questionArea.style.display = 'none';
+                progressContainer.style.display = 'none';
+                showResult();
+            }, 500);
+        }
+        
+        function showResult() {
+            resultScreen.innerHTML = `
+                <div class="text-center fade-in">
+                    <div class="text-7xl mb-4">🏆</div>
+                    <h2 class="text-4xl font-black vmd-purple-text mb-4">PARABÉNS! Você completou a jornada.</h2>
+                    <h3 class="text-2xl font-bold text-white mb-6">Seu Diagnóstico Estratégico em PDF está pronto.</h3>
+                    
+                    <p class="text-gray-300 text-lg max-w-2xl mx-auto mb-8">
+                        Você provou que está comprometido em construir algo incrível. Com base nas suas respostas, geramos um <strong>Diagnóstico em PDF personalizado</strong>, um raio-x das suas maiores oportunidades de crescimento.
+                    </p>
+                    
+                    <div class="card p-6 rounded-lg mb-8 border-2 vmd-border">
+                        <h4 class="text-xl font-bold text-white mb-2">Seu Próximo Passo Para a Clareza Total:</h4>
+                        <p class="text-gray-400">Para ter acesso a este documento valioso, agende sua sessão estratégica. Nesta chamada, nós vamos te <strong>entregar seu PDF</strong> e validar juntos o plano de ação para transformar seu negócio.</p>
+                    </div>
+
+                    <button id="schedule-btn" class="w-full md:w-auto vmd-purple-bg hover:bg-violet-700 text-white font-bold py-4 px-10 rounded-lg text-xl transition duration-300 transform hover:scale-105 inline-block">
+                        Agendar meu diagnóstico estratégico
+                    </button>
+                </div>
+            `;
+            resultScreen.classList.remove('hidden');
+
+            document.getElementById('schedule-btn').addEventListener('click', async () => {
+                const btn = document.getElementById('schedule-btn');
+                btn.textContent = 'Aguarde...';
+                btn.disabled = true;
+                
+                await sendWebhook(scheduleWebhookUrl, userAnswers);
+
+                window.location.href = scheduleLink;
+            });
+        }
+
+        // --- INICIALIZAÇÃO ---
+        startBtn.addEventListener('click', startQuiz);
+
+    </script>
+
+</body>
+</html>
