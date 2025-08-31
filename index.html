@@ -79,6 +79,9 @@
                     <!-- Área das Perguntas (será preenchida via JS) -->
                     <div id="question-area" class="hidden"></div>
 
+                    <!-- Formulário de Coleta de Dados -->
+                    <div id="contact-form-area" class="hidden"></div>
+
                     <!-- Tela de Resultado -->
                     <div id="result-screen" class="hidden"></div>
                 </div>
@@ -95,6 +98,7 @@
         const startBtn = document.getElementById('start-btn');
         const startScreen = document.getElementById('start-screen');
         const questionArea = document.getElementById('question-area');
+        const contactFormArea = document.getElementById('contact-form-area');
         const resultScreen = document.getElementById('result-screen');
         const progressContainer = document.getElementById('progress-container');
         const progressBar = document.getElementById('progress-bar');
@@ -130,14 +134,45 @@
         // --- ESTADO DO QUIZ ---
         let currentQuestionIndex = 0;
         let userAnswers = []; // Array para armazenar as respostas e facilitar a navegação
+        let contactData = {}; // Objeto para armazenar dados de contato
 
         // --- FUNÇÕES ---
+        // Funções de validação
+        function validateEmail(email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return emailRegex.test(email);
+        }
+
+        function validatePhone(phone) {
+            // Remove todos os caracteres não numéricos
+            const cleanPhone = phone.replace(/\D/g, '');
+            // Verifica se tem 10 ou 11 dígitos (DDD + número)
+            return cleanPhone.length >= 10 && cleanPhone.length <= 11;
+        }
+
+        function formatPhone(phone) {
+            const cleanPhone = phone.replace(/\D/g, '');
+            if (cleanPhone.length === 11) {
+                return cleanPhone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+            } else if (cleanPhone.length === 10) {
+                return cleanPhone.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+            }
+            return phone;
+        }
+
         async function sendWebhook(url, data) {
-            // Converte o array de respostas para o formato chave-valor antes de enviar
+            // Converte o array de respostas para o formato chave-valor
             const payload = data.reduce((obj, item) => {
                 obj[item.question] = item.answer;
                 return obj;
             }, {});
+
+            // Adiciona os dados de contato ao payload
+            if (Object.keys(contactData).length > 0) {
+                payload['Nome'] = contactData.name;
+                payload['Email'] = contactData.email;
+                payload['Telefone'] = contactData.phone;
+            }
 
             try {
                 await fetch(url, {
@@ -264,16 +299,153 @@
         }
 
         async function finishQuiz() {
-            await sendWebhook(quizWebhookUrl, userAnswers);
-
             progressBar.style.width = `100%`;
             questionArea.classList.add('fade-out');
-            progressContainer.classList.add('fade-out');
 
             setTimeout(() => {
                 questionArea.style.display = 'none';
+                showContactForm();
+            }, 500);
+        }
+
+        function showContactForm() {
+            contactFormArea.innerHTML = `
+                <div class="fade-in">
+                    <h2 class="text-3xl md:text-4xl font-bold mb-4 text-center text-white">Quase lá! 🎯</h2>
+                    <p class="text-gray-300 text-lg text-center mb-8 max-w-2xl mx-auto">
+                        Para finalizar seu diagnóstico e podermos entrar em contato via WhatsApp com seus resultados, precisamos de algumas informações:
+                    </p>
+                    
+                    <div class="max-w-md mx-auto space-y-6">
+                        <div>
+                            <label class="block text-white font-medium mb-2">Nome completo *</label>
+                            <input type="text" id="contact-name" class="w-full card border-2 vmd-border rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-violet-500 transition-colors" placeholder="Seu nome completo">
+                            <p id="name-error" class="text-red-500 text-sm mt-1 h-5"></p>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-white font-medium mb-2">E-mail *</label>
+                            <input type="email" id="contact-email" class="w-full card border-2 vmd-border rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-violet-500 transition-colors" placeholder="seu@email.com">
+                            <p id="email-error" class="text-red-500 text-sm mt-1 h-5"></p>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-white font-medium mb-2">Telefone (WhatsApp) *</label>
+                            <input type="tel" id="contact-phone" class="w-full card border-2 vmd-border rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-violet-500 transition-colors" placeholder="(11) 99999-9999">
+                            <p id="phone-error" class="text-red-500 text-sm mt-1 h-5"></p>
+                        </div>
+                        
+                        <button id="submit-contact" class="w-full vmd-purple-bg hover:bg-violet-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-300">
+                            Finalizar Diagnóstico
+                        </button>
+                        
+                        <div class="text-center mt-6">
+                            <button id="contact-back-btn" class="text-gray-400 hover:text-white transition-colors">‹ Voltar</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            contactFormArea.classList.remove('hidden');
+            
+            // Event listeners para o formulário
+            document.getElementById('submit-contact').addEventListener('click', handleContactSubmit);
+            document.getElementById('contact-back-btn').addEventListener('click', handleContactBack);
+            
+            // Formatação automática do telefone
+            const phoneInput = document.getElementById('contact-phone');
+            phoneInput.addEventListener('input', (e) => {
+                let value = e.target.value.replace(/\D/g, '');
+                if (value.length <= 11) {
+                    e.target.value = formatPhone(value);
+                }
+                // Remove erro ao digitar
+                phoneInput.classList.remove('error-border');
+                document.getElementById('phone-error').textContent = '';
+            });
+            
+            // Remove erro ao digitar nos outros campos
+            document.getElementById('contact-name').addEventListener('input', () => {
+                document.getElementById('contact-name').classList.remove('error-border');
+                document.getElementById('name-error').textContent = '';
+            });
+            
+            document.getElementById('contact-email').addEventListener('input', () => {
+                document.getElementById('contact-email').classList.remove('error-border');
+                document.getElementById('email-error').textContent = '';
+            });
+        }
+
+        function handleContactSubmit() {
+            const name = document.getElementById('contact-name').value.trim();
+            const email = document.getElementById('contact-email').value.trim();
+            const phone = document.getElementById('contact-phone').value.trim();
+            
+            let hasError = false;
+            
+            // Validação do nome
+            if (name === '') {
+                document.getElementById('contact-name').classList.add('error-border');
+                document.getElementById('name-error').textContent = 'Nome é obrigatório.';
+                hasError = true;
+            }
+            
+            // Validação do email
+            if (email === '') {
+                document.getElementById('contact-email').classList.add('error-border');
+                document.getElementById('email-error').textContent = 'E-mail é obrigatório.';
+                hasError = true;
+            } else if (!validateEmail(email)) {
+                document.getElementById('contact-email').classList.add('error-border');
+                document.getElementById('email-error').textContent = 'Digite um e-mail válido.';
+                hasError = true;
+            }
+            
+            // Validação do telefone
+            if (phone === '') {
+                document.getElementById('contact-phone').classList.add('error-border');
+                document.getElementById('phone-error').textContent = 'Telefone é obrigatório.';
+                hasError = true;
+            } else if (!validatePhone(phone)) {
+                document.getElementById('contact-phone').classList.add('error-border');
+                document.getElementById('phone-error').textContent = 'Digite um telefone válido (DDD + número).';
+                hasError = true;
+            }
+            
+            if (hasError) return;
+            
+            // Armazena os dados de contato
+            contactData = { name, email, phone: formatPhone(phone) };
+            
+            // Processa o formulário
+            document.getElementById('submit-contact').textContent = 'Processando...';
+            document.getElementById('submit-contact').disabled = true;
+            
+            // Animação de saída e finalização
+            contactFormArea.firstElementChild.classList.remove('fade-in');
+            contactFormArea.firstElementChild.classList.add('fade-out');
+            progressContainer.classList.add('fade-out');
+            
+            setTimeout(async () => {
+                contactFormArea.style.display = 'none';
                 progressContainer.style.display = 'none';
+                
+                // Envia os dados via webhook
+                await sendWebhook(quizWebhookUrl, userAnswers);
+                
                 showResult();
+            }, 500);
+        }
+
+        function handleContactBack() {
+            contactFormArea.firstElementChild.classList.remove('fade-in');
+            contactFormArea.firstElementChild.classList.add('fade-out');
+            
+            setTimeout(() => {
+                contactFormArea.style.display = 'none';
+                questionArea.classList.remove('hidden');
+                currentQuestionIndex--;
+                displayQuestion();
             }, 500);
         }
         
